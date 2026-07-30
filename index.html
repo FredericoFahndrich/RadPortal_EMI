@@ -1,9 +1,322 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
 <head>
-    <meta http-equiv="refresh" content="0; url=RE033-026_VMI_English_Translation2.pdf">
-</head>
-<body>
-</body>
+    <meta charset="UTF-8">
 
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Abrindo relatório técnico</title>
+
+    <!--
+        Caso o JavaScript esteja desativado,
+        o PDF será aberto sem enviar a notificação.
+    -->
+    <noscript>
+        <meta
+            http-equiv="refresh"
+            content="0; url=RE033-026_VMI_English_Translation2.pdf"
+        >
+    </noscript>
+
+    <style>
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: Arial, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .container {
+            text-align: center;
+        }
+
+        .spinner {
+            width: 36px;
+            height: 36px;
+            margin: 0 auto 18px;
+            border: 4px solid #ddd;
+            border-top-color: #333;
+            border-radius: 50%;
+            animation: girar 0.8s linear infinite;
+        }
+
+        @keyframes girar {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="spinner"></div>
+        <p>Abrindo o relatório técnico...</p>
+    </div>
+
+    <script>
+        (() => {
+            "use strict";
+
+            /*
+             * =========================================================
+             * CONFIGURAÇÕES
+             * =========================================================
+             */
+
+            const PDF_PATH =
+                "RE033-026_VMI_English_Translation2.pdf";
+
+            /*
+             * Substitua pelo seu e-mail.
+             *
+             * Exemplo:
+             * https://formsubmit.co/ajax/seuemail@gmail.com
+             */
+            const FORMSUBMIT_ENDPOINT =
+                "https://formsubmit.co/ajax/frederico.fahndrich@gmail.com";
+
+            /*
+             * Tempo máximo total antes de abrir o PDF,
+             * mesmo que algum serviço não responda.
+             */
+            const MAXIMUM_WAIT_TIME = 7000;
+
+            const pdfUrl = new URL(
+                PDF_PATH,
+                window.location.href
+            ).href;
+
+            let redirected = false;
+
+            function openPdf() {
+                if (redirected) {
+                    return;
+                }
+
+                redirected = true;
+                window.location.replace(pdfUrl);
+            }
+
+            /*
+             * Realiza uma requisição com tempo máximo.
+             */
+            async function fetchWithTimeout(
+                url,
+                options = {},
+                timeout = 3000
+            ) {
+                const controller = new AbortController();
+
+                const timer = window.setTimeout(() => {
+                    controller.abort();
+                }, timeout);
+
+                try {
+                    return await fetch(url, {
+                        ...options,
+                        signal: controller.signal
+                    });
+                } finally {
+                    window.clearTimeout(timer);
+                }
+            }
+
+            /*
+             * Obtém o IP público do visitante.
+             */
+            async function getPublicIp() {
+                try {
+                    const response = await fetchWithTimeout(
+                        "https://api64.ipify.org?format=json",
+                        {
+                            method: "GET",
+                            cache: "no-store"
+                        },
+                        2500
+                    );
+
+                    if (!response.ok) {
+                        throw new Error(
+                            "Não foi possível consultar o IP."
+                        );
+                    }
+
+                    const result = await response.json();
+
+                    return result.ip ||
+                        "IP não identificado";
+                } catch (error) {
+                    console.warn(
+                        "Não foi possível obter o IP:",
+                        error
+                    );
+
+                    return "Não identificado ou bloqueado";
+                }
+            }
+
+            /*
+             * Envia as informações de acesso pelo FormSubmit.
+             */
+            async function sendAccessNotification() {
+                const accessDate = new Date();
+                const publicIp = await getPublicIp();
+
+                const brazilDateTime =
+                    new Intl.DateTimeFormat("pt-BR", {
+                        timeZone: "America/Sao_Paulo",
+                        dateStyle: "full",
+                        timeStyle: "long"
+                    }).format(accessDate);
+
+                const visitorTimezone =
+                    Intl.DateTimeFormat()
+                        .resolvedOptions()
+                        .timeZone ||
+                    "Não informado";
+
+                const formData = new FormData();
+
+                /*
+                 * Configurações especiais do FormSubmit.
+                 */
+                formData.append(
+                    "_subject",
+                    "Novo acesso ao relatório técnico EMC/EMI"
+                );
+
+                formData.append(
+                    "_template",
+                    "table"
+                );
+
+                /*
+                 * Necessário para que não apareça um CAPTCHA
+                 * antes da abertura do PDF.
+                 */
+                formData.append(
+                    "_captcha",
+                    "false"
+                );
+
+                /*
+                 * Informações que aparecerão no e-mail.
+                 */
+                formData.append(
+                    "Evento",
+                    "Acesso ao relatório técnico EMC/EMI"
+                );
+
+                formData.append(
+                    "Data e hora - Brasil",
+                    brazilDateTime
+                );
+
+                formData.append(
+                    "Data e hora - ISO",
+                    accessDate.toISOString()
+                );
+
+                formData.append(
+                    "IP público",
+                    publicIp
+                );
+
+                formData.append(
+                    "Página acessada",
+                    window.location.href
+                );
+
+                formData.append(
+                    "PDF solicitado",
+                    pdfUrl
+                );
+
+                formData.append(
+                    "Origem do acesso",
+                    document.referrer ||
+                    "Acesso direto ou origem não informada"
+                );
+
+                formData.append(
+                    "Fuso horário do visitante",
+                    visitorTimezone
+                );
+
+                formData.append(
+                    "Idioma do navegador",
+                    navigator.language ||
+                    "Não informado"
+                );
+
+                formData.append(
+                    "Navegador e dispositivo",
+                    navigator.userAgent ||
+                    "Não informado"
+                );
+
+                formData.append(
+                    "Resolução da tela",
+                    `${window.screen.width} × ${window.screen.height}`
+                );
+
+                const response = await fetchWithTimeout(
+                    FORMSUBMIT_ENDPOINT,
+                    {
+                        method: "POST",
+                        headers: {
+                            "Accept": "application/json"
+                        },
+                        body: formData,
+                        cache: "no-store"
+                    },
+                    4000
+                );
+
+                if (!response.ok) {
+                    throw new Error(
+                        `Erro do FormSubmit: ${response.status}`
+                    );
+                }
+
+                return response.json();
+            }
+
+            /*
+             * Garante que o visitante não fique preso na página
+             * caso o FormSubmit ou o serviço de IP não responda.
+             */
+            const emergencyRedirect = window.setTimeout(
+                openPdf,
+                MAXIMUM_WAIT_TIME
+            );
+
+            sendAccessNotification()
+                .then((response) => {
+                    console.log(
+                        "Acesso registrado com sucesso:",
+                        response
+                    );
+                })
+                .catch((error) => {
+                    console.warn(
+                        "A notificação não foi enviada:",
+                        error
+                    );
+                })
+                .finally(() => {
+                    window.clearTimeout(emergencyRedirect);
+                    openPdf();
+                });
+        })();
+    </script>
+</body>
 </html>
